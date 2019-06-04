@@ -1,0 +1,17 @@
+.line .domain, .tick line {
+  stroke: rgb(205, 107, 50);
+  stroke-width: 1;
+}
+.line .tick line {
+  width: 0;
+  height: 0;
+
+}
+.line .tick text {
+  /* color: #f00; */
+}
+.line .line-path {
+  stroke: rgb(185, 127, 127);
+  stroke-width: 2;
+  fill: none;
+}
