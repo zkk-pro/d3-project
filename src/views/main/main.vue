@@ -1,6 +1,6 @@
 <template>
   <div class="main">
-    <!-- <div class="map"></div> -->
+    <div class="map"></div>
     <div class="histogram"></div>
     <div class="line"></div>
   </div>
@@ -13,39 +13,99 @@ export default {
   name: 'Main',
   data () {
     return {
-      msg: '',
-      map: '',
-      histogram: '',
-      line: '',
-      width: 500,
-      height: 300,
+      mapSvg: '', //地图svg
+      histogram: '', // 柱状图
+      width: 500, // svg 宽度
+      height: 300, // svg 高度
+      // 折线图 使用的margin
       margin: {
         left: 50,
         top: 30,
         right: 20,
         bottom: 20
       },
-      show: 'hidden'
+      show: 'hidden',
+      projection: '', // 
     }
   },
   methods: {
     // 创建svg
     createMapSvg () {
-      this.svg = d3.select('.map')
-      .append('svg')
-      .attr('width', '100%')
-      .attr('height', '100%')
-      .style('display', 'block')
+      this.mapSvg = d3.select('.map')
+        .append('svg')
+        .attr('width', this.width)
+        .attr('height', this.height + 50)
+        .style('display', 'block')
+
+      this.createMap()
+      
+
+    },
+
+    // 创建地图
+    async createMap () {
+      // let projection = d3.geoMercator().scale(d3.geoMercator().scale() * 1.3).translate([this.width / 2, this.height / 1.4])
+      // let projection = d3.geoMercator().scale(d3.geoMercator().scale()).translate([0, 0])
+
+      // this.projection = d3.geoMercator().scale(d3.geoMercator().scale() * 10).translate([-this.width * 2.4, -this.height / 2.4])
+
+      this.projection = d3.geoMercator().fitExtent([
+          [0, 0],
+          [500, 300]
+      ]);
+      let path = d3.geoPath().projection(this.projection)
+
+      let data = await d3.json('/static/jsonData/melbourne.json')
+      console.log('data:', data)
+      // return
+      // let features = data.features.filter(function (item, index) {
+      //   return item.properties.name === 'Australia'
+      // })
+      let features = data.features
+      console.log(features)
+      
+      let g = this.mapSvg.selectAll('g')
+        .data(features)
+        .enter()
+        .append('g')
+        
+      g
+        .append('path')
+        .attr('stroke-width', 1)
+        .attr('stroke', '#fff')
+        .attr('fill', function (d, i) {
+          return '#aaa'
+        })
+        .attr('d', path)
+      
+      // this.createMapPoint()
+    },
+
+    // 创建地图上的感应器
+    async createMapPoint() {
+      let res = await d3.csv('/static/csvData/Sensor_Locations.csv')
+      console.log(res)
+      res.forEach(item => {
+        var myLocation = this.projection([item.longitude, item.latitude]);
+        this.mapSvg
+          .append('circle')
+          .attr('r', 5)
+          .attr('fill', '#f00')
+          .attr('fill-opacity', '0.7')
+          .attr('transform', 'translate(' + myLocation[0] + ', ' + myLocation[1] + ')')
+      })
     },
 
     // 柱状图
     createHistogram () {
       let data = [1,2,3,4,5]
       let bar_width = 50
+      let bar_margin = 10
+      let svg_width = data.length * (bar_width + bar_margin)
 
       let scale = d3.scaleLinear()
         .domain([0, d3.max(data)])
-        .range([0, this.height])
+        .range([this.height, 0])
 
       this.histogram = d3.select('.histogram')
         .append('svg')
@@ -57,24 +117,23 @@ export default {
         .data(data)
         .enter()
         .append('g')
-        .attr('transform', (d, i) => `translate(${i * bar_width}, 0)`)
+        .attr('transform', (d, i) => `translate(${i * (bar_width + bar_margin)}, 0)`)
 
       bar.append('rect')
-        .attr('width', bar_width - 10)
-        .attr('height', d => scale(d))
+        .attr('y', d => scale(d))
+        .attr('width', bar_width)
+        .attr('height', d => this.height - scale(d))
         .style('fill', '#fcc')
         .on('mouseover', (d, i) => {
-          console.log(i)
-          console.log(bar)
-          console.log(bar.select('text')[i])
-          console.log(d)
+          console.log(this)
           this.show = 'visible'
         })
       bar.append('text')
         .text((d) => d)
         .attr('x', (bar_width - 10) / 2)
         .attr('y', (d) => scale(d))
-        .style('visibility', this.show)
+        .attr('dy', 15)
+        .style('visibility', 'hidden')
     },
 
     // 折线图
@@ -130,7 +189,7 @@ export default {
     }
   },
   mounted () {
-    // this.createMapSvg()
+    this.createMapSvg()
     this.createHistogram()
     this.createLine()
     // d3.csv('/static/csvData/Sensor_Locations.csv').then(res => {
@@ -141,10 +200,10 @@ export default {
 </script>
 <style lang="less" scoped>
 .main {
-  display: flex;
+  // display: flex;
 }
 .map, .histogram, .line {
-  width: 50%;
+  width: 500px;
   height: 350px;
   margin: 5px;
   // margin-right: 10px;
