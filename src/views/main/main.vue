@@ -1,39 +1,60 @@
 <template>
   <div class="main">
     <!-- <div class="map"></div> -->
-    <div class="histogram">
+    <div class="bg"></div>
+    <div class="main-page">
+      <h1>Hey, Welcome to Melbourne CBD pedestrian counts Exploration</h1>
+      <p>In this exploration, there are 11 sensors in Melbourne CBD has be choosen to visualization , and the record from 2009 to 2015. In the visualization, four seasons is the measurement for pedestrian counts to make comparison in different sensor location and year. Hope this visualization help you make great decision.</p>
+    </div>
+    <div class="chart" v-loading="loading">
+      <div class="histogram">
+        <h2>The pedestrian counts in each season from 2009 to 2015</h2>
+        <div class="line-chart">
+          <div class="spring"></div>
+          <div class="summer"></div>
+        </div>
+        <div class="line-chart" style="margin-top: 20px;">
+          <div class="autumn"></div>
+          <div class="winter"></div>
+        </div>
+      </div>
       <div class="select-box">
+          <h3>Choose a sensor here：</h3>
+          <div class="sensor">
+            <el-select v-model="sensor" placeholder="Sensor" @change="sensorChange">
+              <el-option
+                v-for="item in sensorArr"
+                :key="item.Sensor_Name"
+                :label="item.Sensor_Name"
+                :value="item.Sensor_Name">
+              </el-option>
+            </el-select>
+          </div>
+        </div>
+      <div class="pie">
         <div class="date">
-          <!-- <el-select v-model="date" placeholder="请选择年份">
+          <span class="date-des">data in different year：</span>
+          <el-select v-model="date" style="width: 100px" placeholder="Year" @change="dateChange">
             <el-option
               v-for="item in dateArr"
               :key="item"
               :label="item"
               :value="item">
             </el-option>
-          </el-select> -->
-        </div>
-        <div class="sensor">
-          <el-select v-model="sensor" placeholder="请选择感应点" @change="sensorChange">
-            <el-option
-              v-for="item in sensorArr"
-              :key="item.Sensor_Name"
-              :label="item.Sensor_Name"
-              :value="item.Sensor_Name">
-            </el-option>
           </el-select>
+        </div>      
+        
+        <div class="chart-box">
+          <div class="pie-chart">
+            <h3>the percentage of counts in each season in {{date}}</h3>
+          </div>
+          <!-- 趋势 -->
+          <div class="trend">
+            <h3>The trend of pedestrian counts in each season in {{date}}</h3>
+            <div class="trend-chart"></div>
+          </div>
         </div>
       </div>
-      
-      <div class="line-chart">
-        <div class="spring"></div>
-        <div class="summer"></div>
-        <div class="autumn"></div>
-        <div class="winter"></div>
-      </div>
-    </div>
-    <div class="pie">
-      <div class="pie-chart"></div>
     </div>
   </div>
 </template>
@@ -45,10 +66,11 @@ export default {
   name: 'Main',
   data () {
     return {
+      loading: true, 
       width: 500, // svg 宽度
       height: 300, // svg 高度
-      dateArr: [2009, 2010, 1012, 2013], // 所有年份
-      date: 2014, // 当前选择的年份
+      dateArr: [2009, 2010, 2011, 2012, 2013, 2014,2015], // 所有年份
+      date: 2009, // 当前选择的年份
       sensorArr: [], // 所有感应器
       sensor: '', // 当前选择的感应器
       csvData: [], // 行人数据
@@ -65,9 +87,6 @@ export default {
       autumnData: [], // 秋
       winterData: [],  // 冬
 
-      mapSvg: '', //地图svg
-      histogram: '', // 柱状图
-
       // 折线图 使用的margin
       margin: {
         left: 70,
@@ -75,8 +94,14 @@ export default {
         right: 20,
         bottom: 20
       },
-      show: 'hidden',
-      projection: '', // 
+
+      // 饼状图
+      pieTotalCount: 0,
+      arg_generator: '', // arg生成器
+      angle_data: '', // 角度数据
+
+      // 趋势图
+      trend: ''
       
     }
   },
@@ -89,7 +114,8 @@ export default {
       this.updateSummer()
       this.updateAutumn()
       this.updateWinter()
-      // this.divideSeason()
+      this.updatePie()
+      this.updateTrend()
     },
     updateSpring () {
       let data = this.springData
@@ -98,9 +124,7 @@ export default {
 
       // 缩放函数
       let scale_x = d3.scaleLinear().domain([0, data.length - 1]).range([0, g_width])
-      // let scale_y = d3.scaleLinear().domain([0, d3.max(data.Hourly_Counts)]).range([0, g_height])
       let scale_y = d3.scaleLinear().domain([d3.max(data, d => d.Hourly_Counts) || 1, 0]).range([0, g_height])
-      // let scale_y = d3.scaleLinear().domain([1500000,0]).range([0, g_height])
 
       // 折线生成
       let line_generator = d3.line()
@@ -110,8 +134,13 @@ export default {
         .y((d,i) => {
           return scale_y(d.Hourly_Counts)
         })
+      let scale_yz = d3.scaleLinear()
+        .domain([d3.max(data, d => d.Hourly_Counts) || i + 10, 0 ])
+        .range([0, g_height])
+
       d3.selectAll('path.spring').attr('d', line_generator(data))
       d3.selectAll('.name-spring').text(this.sensor)
+      d3.selectAll('g.spring-y').call(d3.axisLeft(scale_yz))
     },
     updateSummer () {
       let data = this.summerData
@@ -120,9 +149,11 @@ export default {
 
       // 缩放函数
       let scale_x = d3.scaleLinear().domain([0, data.length - 1]).range([0, g_width])
-      // let scale_y = d3.scaleLinear().domain([0, d3.max(data.Hourly_Counts)]).range([0, g_height])
       let scale_y = d3.scaleLinear().domain([d3.max(data, d => d.Hourly_Counts) || 1,0 ]).range([0, g_height])
-      // let scale_y = d3.scaleLinear().domain([1500000,0]).range([0, g_height])
+
+      let scale_yz = d3.scaleLinear()
+        .domain([d3.max(data, d => d.Hourly_Counts) || i + 10, 0 ])
+        .range([0, g_height])
 
       // 折线生成
       let line_generator = d3.line()
@@ -134,6 +165,7 @@ export default {
         })
       d3.selectAll('path.summer').attr('d', line_generator(data))
       d3.selectAll('.name-summer').text(this.sensor)
+      d3.selectAll('g.summer-y').call(d3.axisLeft(scale_yz))
     },
     updateAutumn () {
       let data = this.autumnData
@@ -142,9 +174,11 @@ export default {
 
       // 缩放函数
       let scale_x = d3.scaleLinear().domain([0, data.length - 1]).range([0, g_width])
-      // let scale_y = d3.scaleLinear().domain([0, d3.max(data.Hourly_Counts)]).range([0, g_height])
       let scale_y = d3.scaleLinear().domain([d3.max(data, d => d.Hourly_Counts) || 1,0 ]).range([0, g_height])
-      // let scale_y = d3.scaleLinear().domain([1500000,0]).range([0, g_height])
+
+      let scale_yz = d3.scaleLinear()
+        .domain([d3.max(data, d => d.Hourly_Counts) || i + 10, 0 ])
+        .range([0, g_height])
 
       // 折线生成
       let line_generator = d3.line()
@@ -156,6 +190,7 @@ export default {
         })
       d3.selectAll('path.autumn').attr('d', line_generator(data))
       d3.selectAll('.name-autumn').text(this.sensor)
+      d3.selectAll('g.autumn-y').call(d3.axisLeft(scale_yz))
     },
     updateWinter() {
       let data = this.winterData
@@ -164,9 +199,11 @@ export default {
 
       // 缩放函数
       let scale_x = d3.scaleLinear().domain([0, data.length - 1]).range([0, g_width])
-      // let scale_y = d3.scaleLinear().domain([0, d3.max(data.Hourly_Counts)]).range([0, g_height])
       let scale_y = d3.scaleLinear().domain([d3.max(data, d => d.Hourly_Counts) || 1,0 ]).range([0, g_height])
-      // let scale_y = d3.scaleLinear().domain([1500000,0]).range([0, g_height])
+
+      let scale_yz = d3.scaleLinear()
+        .domain([d3.max(data, d => d.Hourly_Counts) || i + 10, 0 ])
+        .range([0, g_height])
 
       // 折线生成
       let line_generator = d3.line()
@@ -178,139 +215,70 @@ export default {
         })
       d3.selectAll('path.winter').attr('d', line_generator(data))
       d3.selectAll('.name-winter').text(this.sensor)
+      d3.selectAll('g.winter-y').call(d3.axisLeft(scale_yz))
     },
 
-    // 创建svg
-    createMapSvg () {
-      let width = window.innerHeight
-      let height = window.innerHeight
-      this.mapSvg = d3.select('.map')
-        .append('svg')
-        .attr('width', '100%')
-        // .attr('height', this.height + 50)
-        .attr('height', '100%')
-        .style('display', 'block')
-
-      this.createMap()
-
+    // 时间选择事件
+    dateChange(value) {
+      this.date = value
+      console.log(this.date)
+      this.updatePie()
+      this.updateTrend()
     },
+    // 更新饼状图
+    updatePie () {
+      let result = this.filterPieData()
+      let color = d3.scaleOrdinal(d3.schemeSet2)
 
-    // 创建地图
-    async createMap () {
-      // let projection = d3.geoMercator().scale(d3.geoMercator().scale() * 1.3).translate([this.width / 2, this.height / 1.4])
-      // let projection = d3.geoMercator().scale(d3.geoMercator().scale()*500).translate([-0000, d3.geoMercator().scale()*500])
-
-      // this.projection = d3.geoMercator().scale(d3.geoMercator().scale() * 10).translate([-this.width * 2.4, -this.height / 2.4])
-
-      // this.projection = d3.geoMercator()
-      let projection = d3.geoMercator(d3.geoMercator().scale())
-
-      let width = window.innerHeight
-      let height = window.innerHeight
-      console.log('width: ', width)
-      // this.projection = d3.geoMercator().scale(500).translate([width/2, height/2])
-      // this.projection = d3.geoMercator().scale(1).translate([1,-0])
-
-      let path = d3.geoPath().projection(projection)
-
-      let data = await d3.json('/static/jsonData/new.json')
-      // let data = await d3.json('/static/jsonData/louisville.json')
-      // let data = await d3.json('/static/jsonData/world.json')
-      console.log('data:', data)
+      console.log('angle:', this.angle_data(result))
+      d3.selectAll('.pie-path')
+        .data(this.angle_data(result))
+        .attr('d', this.arg_generator)
+        .style('fill', (d,i) => color(i))
       
-      // return
-      // let features = data.features.filter(function (item, index) {
-      //   return item.properties.name === 'Australia'
-      // })
-
-      // ==》new
-      // let features = data.features
-      // console.log(features)
-      let features = data
-      console.log(features)
-      
-      let g = this.mapSvg.selectAll('g')
-        .data(features)
-        .enter()
-        .append('g')
-        
-      g
-        .append('path')
-        .attr('stroke-width', 1)
-        .attr('stroke', '#fff')
-        .attr('fill', function (d, i) {
-          return '#aaa'
+      d3.selectAll('.pie-text')
+        .data(this.angle_data(result))
+        .text(d => {
+          if (d.data.Hourly_Counts) 
+            return (d.data.Hourly_Counts / this.pieTotalCount * 100).toFixed(2) + '%'
+          else
+            return ''
         })
-        .attr('d', path)
-      
-      // this.createMapPoint()
+        .attr('transform', d => `translate(${this.arg_generator.centroid(d)})`)
+        .attr('text-anchor', 'middle')
     },
+    // 更新趋势图
+    updateTrend () {
+      let data = this.filterTrendData()
+      let g_width = this.width - this.margin.left - this.margin.right
+      let g_height = this.height - this.margin.top - this.margin.bottom
 
-    // 创建地图上的感应器
-    async createMapPoint() {
-      let res = await d3.csv('/static/csvData/Sensor_Locations.csv')
-      console.log(res)
-      res.forEach(item => {
-        var myLocation = this.projection([item.longitude, item.latitude]);
-        this.mapSvg
-          .append('circle')
-          .attr('r', 5)
-          .attr('fill', '#f00')
-          .attr('fill-opacity', '0.7')
-          .attr('transform', 'translate(' + myLocation[0] + ', ' + myLocation[1] + ')')
-      })
-    },
+      // 缩放函数
+      let scale_x = d3.scaleLinear().domain([0, data.length - 1]).range([60, g_width -60])
+      let scale_y = d3.scaleLinear().domain([d3.max(data, d => d.Hourly_Counts) || 1,0 ]).range([0, g_height])
 
-    // 柱状图
-    createHistogram () {
-      let data = [1,2,3,4,5]
-      let bar_width = 50
-      let bar_margin = 10
-      let svg_width = data.length * (bar_width + bar_margin)
-
-      let scale = d3.scaleLinear()
-        .domain([0, d3.max(data)])
-        .range([this.height, 0])
-
-      this.histogram = d3.select('.histogram')
-        .append('svg')
-        .attr('width', this.width)
-        .attr('height', this.height)
-      
-      let bar = this.histogram
-        .selectAll('g')
-        .data(data)
-        .enter()
-        .append('g')
-        .attr('transform', (d, i) => `translate(${i * (bar_width + bar_margin)}, 0)`)
-
-      bar.append('rect')
-        .attr('y', d => scale(d))
-        .attr('width', bar_width)
-        .attr('height', d => this.height - scale(d))
-        .style('fill', '#fcc')
-        .on('mouseover', (d, i) => {
-          console.log(this)
-          this.show = 'visible'
+      // 折线生成
+      let line_generator = d3.line()
+        .x((d,i) => {
+          return scale_x(i)
         })
-      bar.append('text')
-        .text((d) => d)
-        .attr('x', (bar_width - 10) / 2)
-        .attr('y', (d) => scale(d))
-        .attr('dy', 15)
-        .style('visibility', 'hidden')
+        .y((d,i) => {
+          return scale_y(d.Hourly_Counts)
+        })
+      let scale_yz = d3.scaleLinear()
+        .domain([d3.max(data, (d, i) => d.Hourly_Counts || i + 10), 0])
+        .range([0, g_height])
+
+      d3.selectAll('path.trend').attr('d', line_generator(data))
+      d3.selectAll('g.trend-y').call(d3.axisLeft(scale_yz))
     },
 
-
-// ----------- 折线图
+// ----------- 折线图---------------
     // 读取csv数据
     async readCsv() {
       try {
-        this.csvData = await d3.csv('/static/csvData/Pedestrian_Counting_System___2009_to_Present__counts_per_hour.csv', (d) => {
-          d.Hourly_Counts = +d.Hourly_Counts
-          d.Year = +d.Year
-          return d
-        })
+        let csvData = await d3.json('/static/jsonData/Pedestrian_Counting_System_perhour.json')
+        this.csvData = csvData
         this.divideSeason(this.csvData)
       } catch (error) {
         console.log('error: ', error)
@@ -324,49 +292,54 @@ export default {
           case 'January':
           case 'February':
           case 'March':
-            this.sensorClassify.spring.push(item)
+            let spring = item
+            spring.Year = parseInt(spring.Year)
+            spring.Hourly_Counts = parseInt(spring.Hourly_Counts)
+            this.sensorClassify.spring.push(spring)
             break
           case 'April':
           case 'May':
           case 'June':
-            this.sensorClassify.summer.push(item)
+            let summer = item
+            summer.Year = parseInt(summer.Year)
+            summer.Hourly_Counts = parseInt(summer.Hourly_Counts)
+            this.sensorClassify.summer.push(summer)
             break
           case 'July':
           case 'August':
           case 'September':
-            this.sensorClassify.autumn.push(item)
+            let autumn = item
+            autumn.Year = parseInt(autumn.Year)
+            autumn.Hourly_Counts = parseInt(autumn.Hourly_Counts)
+            this.sensorClassify.autumn.push(autumn)
             break
           case 'October':
           case 'November':
           case 'December':
-            this.sensorClassify.winter.push(item)
+            let winter = item
+            winter.Year = parseInt(winter.Year)
+            winter.Hourly_Counts = parseInt(winter.Hourly_Counts)
+            this.sensorClassify.winter.push(winter)
             break
         }
       })
-      // 感应器过滤数据
-      console.log(this.sensor)
-      console.log(this.date)
       
-      // this.filtered()
+      this.filtered()
 
-      // this.createLineNew(this.springData, '.spring')
-      // this.createLineNew(this.summerData, '.summer')
-      // this.createLineNew(this.autumnData, '.autumn')
-      // this.createLineNew(this.winterData, '.winter')
+      this.createLine(this.springData, '.spring')
+      this.createLine(this.summerData, '.summer')
+      this.createLine(this.autumnData, '.autumn')
+      this.createLine(this.winterData, '.winter')
     },
     // 过滤好的数据
     filtered () {
       this.springData = this.filterYearData(this.sensorClassify.spring)
-      // console.log('springData:', this.springData)
 
       this.summerData = this.filterYearData(this.sensorClassify.summer)
-      // console.log('summerData:', this.summerData)
 
       this.autumnData = this.filterYearData(this.sensorClassify.autumn)
-      // console.log('autumnData:', this.autumnData)
 
       this.winterData = this.filterYearData(this.sensorClassify.winter)
-      // console.log('winterData:', this.winterData)
     },
     // 过滤出每个年份的数据
     filterYearData(data) {
@@ -410,15 +383,13 @@ export default {
       return tempFilter
     },
     // 创建曲线图表
-    createLineNew (data, className) {
+    createLine (data, className) {
       let g_width = this.width - this.margin.left - this.margin.right
       let g_height = this.height - this.margin.top - this.margin.bottom
 
       // 缩放函数
       let scale_x = d3.scaleLinear().domain([0, data.length - 1]).range([0, g_width])
-      // let scale_y = d3.scaleLinear().domain([0, d3.max(data.Hourly_Counts)]).range([0, g_height])
       let scale_y = d3.scaleLinear().domain([d3.max(data, d => d.Hourly_Counts) || 1,0]).range([0, g_height])
-      // let scale_y = d3.scaleLinear().domain([1500000, 0]).range([0, g_height])
 
       // 折线生成
       let line_generator = d3.line()
@@ -429,7 +400,6 @@ export default {
           return scale_y(d.Hourly_Counts)
         })
 
-      // let svg = d3.select('.spring')
       let svg = d3.select(className)
         .append('svg')
         .attr('width', this.width)
@@ -439,6 +409,7 @@ export default {
         .append('text')
         .text(className.replace('.', ''))
         .attr('dy', '1em')
+        .attr('dx', '1em')
         .style('fill', '#f77c0c')
 
       svg
@@ -461,7 +432,7 @@ export default {
         .attr('class', className.replace('.', ''))
         .style('fill', 'none')
         .style('stroke', '#3a8ee6')
-        .style('stroke-width', '1')
+        .style('stroke-width', '2')
 
       // x轴坐标比例尺
       let scale_xz = d3.scaleTime()
@@ -469,7 +440,7 @@ export default {
         .domain([new Date(2009, 0), new Date(2015, 1)])
         // y轴坐标比例尺
       let scale_yz = d3.scaleLinear()
-        .domain([d3.max(data, d => d.Hourly_Counts) || 1, 0 ])
+        .domain([d3.max(data, d => d.Hourly_Counts) || i + 10, 0 ])
         .range([0, g_height])
 
       // x 坐标轴
@@ -480,20 +451,18 @@ export default {
       // y 坐标轴
       g
         .append('g')
+        .attr('class', `${className.replace('.', '')}-y`)
         .call(d3.axisLeft(scale_yz))
         .append('text')
-        .text('人数')
+        .text('counts')
         .style('stroke', '#606266')
         .style('stroke-width', '1')
         .style('font-weight', '300')
         .style('text-anchor', 'middle')
-        // .style('transform', 'rotate(-90deg)')
-        // .attr('dy', '1em')
         .attr('dy', '-1em')
-        // .attr('dx', '2em')
-
+      this.loading = false
     },
-    // ----------- 折线图End
+    // ----------- 折线图End---------------
 
     // 创建饼状svg
     createPieSvg () {
@@ -506,62 +475,112 @@ export default {
 
       let textG = svg
         .append('g')
+        .attr('transform', `translate(210, 180)`)
+
+      let color = d3.scaleOrdinal(d3.schemeSet2)
+      let textArr = ['spring', 'summer', 'autumn', 'winter']
+
+      textArr.forEach((item, index) => {
+        textG
+          .append('text')
+          .text(item)
+          .attr('dy', `${index}em`)
+          .style('fill', color(index))
+          .attr('text-anchor', 'middle')
+      })
+      textArr.forEach((item, index) => {
+        textG
+          .append('circle')
+          .attr('cx', -40)
+          .attr('cy', `${index}em`)
+          .attr('r', 7)
+          .style('fill', color(index))
+          .style('transform', 'translate(0, -4px)')
+      })
       
       let g = svg.append('g')
         .attr('transform', `translate(200, 200)`)
 
-      let arg_generator = d3.arc()
+      this.arg_generator = d3.arc()
         .innerRadius(100)
         .outerRadius(200)
-        // .startAngle(0)
-        // // .endAngle(Math.PI / 2);
-        // .endAngle(120 * Math.PI / 180);
 
       let result = this.filterPieData()
+      this.pieTotalCount = result.reduce((total, current) => {
+        return total += current.Hourly_Counts
+      }, 0)
+      console.log('totalCount', this.pieTotalCount)
 
-      let angle_data = d3.pie()
-        .value(d => d.Hourly_Counts)
+      this.angle_data = d3.pie()
+        .value(d => d.Hourly_Counts || 1)
 
-      let color = d3.scaleOrdinal(d3.schemeCategory10)
+      console.log('angle_data', this.angle_data(result))
       g
         .selectAll('path')
-        .data(angle_data(result))
+        .data(this.angle_data(result))
         .enter()
         .append('path')
-        .attr('d', arg_generator)
+        .attr('class', 'pie-path')
+        .attr('d', this.arg_generator)
         .style('fill', (d,i) => color(i))
 
+      // 饼图上的百分比
       g
         .selectAll('text')
-        .data(angle_data(result))
+        .data(this.angle_data(result))
         .enter()
         .append('text')
-        .text((d) => d.data.Hourly_Counts)
-        .attr('transform', d => `translate(${arg_generator.centroid(d)})`)
+        .attr('class', 'pie-text')
+        .text(d => {
+          if (d.data.Hourly_Counts) 
+            return (d.data.Hourly_Counts / this.pieTotalCount * 100).toFixed(2) + '%'
+          else
+            return ''
+        })
+        .attr('transform', d => `translate(${this.arg_generator.centroid(d)})`)
         .attr('text-anchor', 'middle')
       
     },
     // 过滤出饼状数据
     filterPieData () {
-      let spring = this.sensorClassify.spring[0]
+      let spring = {
+        Year: this.date,
+        Hourly_Counts: 0,
+        Sensor_Name: this.sensor,
+      }
       this.sensorClassify.spring.forEach(item => {
         if (item.Year === this.date && item.Sensor_Name === this.sensor) {
           spring.Hourly_Counts += item.Hourly_Counts
         }
       })
-      let summer = this.sensorClassify.summer[0]
+
+      let summer = {
+        Year: this.date,
+        Hourly_Counts: 0,
+        Sensor_Name: this.sensor,
+      }
       this.sensorClassify.summer.forEach(item => {
         if (item.Year === this.date && item.Sensor_Name === this.sensor) {
           summer.Hourly_Counts += item.Hourly_Counts
         }
       })
-      let autumn = this.sensorClassify.autumn[0]
+
+      let autumn = {
+        Year: this.date,
+        Hourly_Counts: 0,
+        Sensor_Name: this.sensor,
+      }
       this.sensorClassify.autumn.forEach(item => {
         if (item.Year === this.date && item.Sensor_Name === this.sensor) {
           autumn.Hourly_Counts += item.Hourly_Counts
         }
       })
-      let winter = this.sensorClassify.winter[0]
+
+      let winter = {
+        Year: this.date,
+        Hourly_Counts: 0,
+        Sensor_Name: this.sensor,
+      }
       this.sensorClassify.winter.forEach(item => {
         if (item.Year === this.date && item.Sensor_Name === this.sensor) {
           winter.Hourly_Counts += item.Hourly_Counts
@@ -572,100 +591,177 @@ export default {
       return result
     },
 
-
-    // 折线图
-    createLine (d) {
-      // let data = [1,5,2,7,4,1,2,3,1,1,1]
-      let data = d
-
+    // 趋势图
+    createTrendChart () {
+      let data = this.filterTrendData()
+      
       let g_width = this.width - this.margin.left - this.margin.right
       let g_height = this.height - this.margin.top - this.margin.bottom
 
-      let scale_x = d3.scaleLinear()
-        .domain([0, data.length - 1]) // 输入范围
-        .range([0, g_width]) // 输出范围
+      // 缩放函数
+      let scale_x = d3.scaleLinear().domain([0, data.length - 1]).range([60, g_width -60])
+      let scale_y = d3.scaleLinear().domain([d3.max(data, d => d.Hourly_Counts) || 1,0]).range([0, g_height])
 
-      let scale_y = d3.scaleLinear()
-      .domain([ 0, d3.max(data) ])
-      .range([ g_height, 0 ])
-
-      // let line_generator = d3.line()
-      //   .x((d, i) => scale_x(i))
-      //   .y((d, i) => scale_y(d))
-      //   .curve(d3.curveCatmullRom.alpha(0))
+      // 折线生成
       let line_generator = d3.line()
-        .x((d, i) => {
-          console.log(d)
-          scale_x(d.Year)
+        .x((d,i) => {
+          return scale_x(i)
         })
-        .y((d, i) => scale_y(d.Hourly_Counts))
-        .curve(d3.curveCatmullRom.alpha(0))
+        .y((d,i) => {
+          return scale_y(d.Hourly_Counts)
+        })
 
-      let g = d3.select('.spring')
+      let svg = d3.select('.trend-chart')
         .append('svg')
         .attr('width', this.width)
         .attr('height', this.height)
+
+      let g = svg
         .append('g')
         .attr('transform', `translate(${this.margin.left}, ${this.margin.top})`)
+      
       g
         .append('path')
         .attr('d', line_generator(data))
-        .attr('class', 'line-path')
+        .attr('class', 'trend')
+        .style('fill', 'none')
+        .style('stroke', '#3a8ee6')
+        .style('stroke-width', '2')
 
-      // let x_axis = d3.axisRight(scale_x)
-      let scale_xz = d3.scaleOrdinal().domain([2009,2010,2012]).range([0, 100])
-      let x_axis = d3.axisBottom(scale_xz)
-      let y_axis = d3.axisLeft(scale_y)
+      // x轴坐标比例尺
+      let scale_xz = d3.scaleBand()
+        .range([0, g_width])
+        .domain(['spring', 'summer', 'autumu', 'winter'])
+
+        // y轴坐标比例尺
+      let scale_yz = d3.scaleLinear()
+        .domain([d3.max(data, (d, i) => d.Hourly_Counts || i + 10), 0])
+        .range([0, g_height])
 
       // x 坐标轴
       g
         .append('g')
-        .call(x_axis)
+        .call(d3.axisBottom(scale_xz))
         .attr('transform', `translate(0, ${g_height})`)
       // y 坐标轴
       g
         .append('g')
-        .call(y_axis)
+        .attr('class', 'trend-y')
+        .call(d3.axisLeft(scale_yz))
         .append('text')
-        .text('人数')
-        .style('stroke', '#f00')
-        .style('transform', 'rotate(-90deg)')
-        .attr('dy', '1em')
-
+        .text('counts')
+        .style('stroke', '#606266')
+        .style('stroke-width', '1')
+        .style('font-weight', '300')
+        .style('text-anchor', 'middle')
+        .attr('dy', '-1em')
+      
+    },
+    // 过滤趋势数据
+    filterTrendData () {
+      let tempFilter = [
+        {season: 'spring', Hourly_Counts: 0},
+        {season: 'summer', Hourly_Counts: 0},
+        {season: 'autumn', Hourly_Counts: 0},
+        {season: 'winter', Hourly_Counts: 0}
+      ]
+      let filterData = this.csvData.filter(item => {
+        return item.Sensor_Name === this.sensor && item.Year === this.date
+      })
+      
+      filterData.forEach(item => {
+        switch (item.Month) {
+          case 'January':
+          case 'February':
+          case 'March':
+            tempFilter[0].Hourly_Counts += item.Hourly_Counts
+            break
+          case 'April':
+          case 'May':
+          case 'June':
+            tempFilter[1].Hourly_Counts += item.Hourly_Counts
+            break
+          case 'July':
+          case 'August':
+          case 'September':
+            tempFilter[2].Hourly_Counts += item.Hourly_Counts
+            break
+          case 'October':
+          case 'November':
+          case 'December':
+            tempFilter[3].Hourly_Counts += item.Hourly_Counts
+            break
+        }
+      })
+      console.log('trend-data-->', tempFilter)
+      return tempFilter
     },
 
+    // 感应器数据
     async sensorData () {
-      let sensor = await d3.csv('/static/csvData/Sensor_Locations.csv')
+      let sensor = await d3.json('/static/jsonData/location.json')
       this.sensorArr = sensor
-      this.sensor = sensor[1].Sensor_Name
+      this.sensor = sensor[0].Sensor_Name
     }
   },
   async mounted () {
-
-    // this.createMapSvg()
-    // this.createHistogram()
-    // this.createLine()
 
     this.sensorData()
 
     await this.readCsv()
 
     this.createPieSvg()
-    // await this.divideSeason()
-  },
-  watch: {
-
+    this.createTrendChart()
   }
 }
 </script>
 <style lang="less" scoped>
 .main {
-  // display: flex;
+  min-width: 100%;
+  background: rgba(0, 0, 0, .6);
+  color: #fff;
+}
+.bg::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left:0;
+  right: 0;
+  bottom: 0;
+  background: url('../../assets/img/meb_cbd.jpg');
+  background-size: cover;
+  background-repeat: no-repeat;
+  z-index: -10;
+}
+.main-page {
+  width: 100%;
+  height: 100vh;
+  text-align: center;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  h1 {
+    padding: 100px;
+  }
+  p {
+    width: 80%;
+    margin: 0 auto;
+    margin-bottom: 10px;
+    word-wrap: break-word;
+    font-size: 22px;
+  }
+  i {
+    position: absolute;
+    bottom: 20px;
+    font-size: 60px;
+    background: rgba(255, 255, 255, .3);
+    border-radius: 50%;
+  }
 }
 .map, .histogram, .pie {
   width: 100%;
-  height: 100vh;
-  border-bottom: 1px solid #ccc;
 }
 path {
   stroke: #fcc;
@@ -675,26 +771,65 @@ path {
 .histogram {
   padding: 20px;
   box-sizing: border-box;
-  .select-box {
-    display: flex;
-  }
-  .date, .sensor {
-    width: 300px;
+  h2 {
+    text-align: center;
+    padding: 10px 0;
   }
   .line-chart {
     display: flex;
     flex-wrap: wrap;
+    justify-content: center;
     .spring, .summer, .autumn, .winter {
-      width: 500px;
-      height: 350px;
+      height: 330px;
       background: #fdfdfd;
       margin: 5px;
     }
   }
 }
+.select-box {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin: 30px 0;
+  }
+  .date, .sensor {
+    margin: 0 5px;
+  }
 .pie {
-  .pie-chart {
-
+  background: rgba(255, 255, 255, .8);
+  padding: 20px;
+  box-sizing: border-box;
+  text-align: center;
+  .date {
+    margin: 30px;
+    .date-des {
+      color: #333;
+      font-weight: 500;
+    }
+  }
+  h3 {
+    color: #333;
+    text-align: center;
+    margin-bottom: 30px;
+  }
+  .chart-box {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    .trend, .pie-chart {
+      flex: 1;
+    }
+    .pie-chart {
+      width: 400px;
+    }
+    .trend {
+      justify-self: center;
+      .trend-chart {
+        width: 500px;
+        margin: 0 auto;
+        background: #fff;
+      }
+    }
   }
 }
 </style>
